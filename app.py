@@ -8,6 +8,7 @@ from langchain.chains import LLMChain
 from dotenv import load_dotenv
 import speech_recognition as sr
 import os
+import av
 import time
 import pyttsx3
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -36,7 +37,7 @@ class AudioProcessor(AudioProcessorBase):
             st.error(f"Could not request results from Google Speech Recognition service; {e}")
         return frame
     
-    
+
 def init_db():
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
