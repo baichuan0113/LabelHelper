@@ -244,7 +244,7 @@
 
 
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, AudioProcessorBase, ClientSettings
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, AudioProcessorBase
 import av
 from langchain_openai import ChatOpenAI
 from langchain.document_loaders.csv_loader import CSVLoader
@@ -394,7 +394,7 @@ def show_main_app():
 
     webrtc_ctx = webrtc_streamer(
         key="audio",
-        mode=ClientSettings.Mode.SENDRECV,
+        mode=WebRtcMode.SENDRECV,
         audio_processor_factory=AudioProcessor,
         media_stream_constraints={
             "audio": True,
