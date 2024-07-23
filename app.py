@@ -223,8 +223,6 @@ def main():
 
 
 def show_main_app():
-    #st.set_page_config(page_title="Roboflow Labelling Helper", page_icon=":bird:")
-    #st.header("Roboflow Labelling Helper :bird:")
     st.header(f"Welcome to Roboflow Labelling Helper :bird: ({st.session_state.user_email})")
 
     if st.button("Logout"):
@@ -235,15 +233,13 @@ def show_main_app():
         st.session_state.engine = pyttsx3.init()
         voices = st.session_state.engine.getProperty('voices')
         st.session_state.engine.setProperty('voice', 'en-us')
-        st.session_state.engine.setProperty('rate', 100) 
+        st.session_state.engine.setProperty('rate', 100)
 
     if 'recognized_message' not in st.session_state:
         st.session_state.recognized_message = ""
 
     logtxtbox = st.empty()
     logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
-
-    r = sr.Recognizer()
 
     recorder = AudioRecorder()
     webrtc_ctx = webrtc_streamer(
@@ -265,15 +261,37 @@ def show_main_app():
             st.write("Recording stopped.")
 
         stop_recording_after_delay()
-        if 'recognized_message' in st.session_state:
-            logtxtbox = st.empty()
-            logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
-            print(st.session_state.recognized_message)
-            print("-----------")
-            result = generate_response(st.session_state.recognized_message)
-            st.session_state['result'] = result
-            store_message(st.session_state.user_email, st.session_state.recognized_message)
-        # with sr.Microphone() as source:
+
+    if 'recognized_message' in st.session_state:
+        logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
+        result = generate_response(st.session_state.recognized_message)
+        st.session_state['result'] = result
+        store_message(st.session_state.user_email, st.session_state.recognized_message)
+
+    if 'result' in st.session_state and st.session_state['result']:
+        st.info(st.session_state['result'])
+        if st.button('Speak Result'):
+            process = multiprocessing.Process(target=speak_text, args=(st.session_state['result'],))
+            process.start()
+            st.session_state['process'] = process
+        if st.button('Stop Speaking'):
+            if 'process' in st.session_state:
+                st.session_state['process'].terminate()
+                st.session_state['process'] = None
+
+    st.subheader("Your Recognized Messages")
+    messages = get_messages(st.session_state.user_email)
+    for msg, timestamp in messages:
+        st.write(f"{timestamp}: {msg}")
+
+    # Start audio processing thread
+    if not hasattr(st.session_state, 'audio_thread'):
+        st.session_state.audio_thread = threading.Thread(target=recorder.process_audio, daemon=True)
+        st.session_state.audio_thread.start()
+
+
+
+    # with sr.Microphone() as source:
         #     calibration_message = st.empty()
         #     calibration_message.write("Please wait. Calibrating microphone...")
         #     r.adjust_for_ambient_noise(source, duration=1)
@@ -296,21 +314,6 @@ def show_main_app():
         #         st.error("Google Speech Recognition could not understand audio")
         #     except sr.RequestError as e:
         #         st.error(f"Could not request results from Google Speech Recognition service; {e}")
-
-    if 'result' in st.session_state and st.session_state['result']:
-        st.info(st.session_state['result'])
-        if st.button('Speak Result'):
-            process = multiprocessing.Process(target=speak_text, args=(st.session_state['result'],))
-            process.start()
-            st.session_state['process'] = process
-        if st.button('Stop Speaking'):
-            if 'process' in st.session_state:
-                st.session_state['process'].terminate()
-                st.session_state['process'] = None
-    st.subheader("Your Recognized Messages")
-    messages = get_messages(st.session_state.user_email)
-    for msg, timestamp in messages:
-        st.write(f"{timestamp}: {msg}")
 
 if __name__ == '__main__':
     main()
