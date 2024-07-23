@@ -263,7 +263,7 @@ def show_main_app():
         stop_recording_after_delay()
 
     if 'recognized_message' in st.session_state:
-        logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
+        #logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
         result = generate_response(st.session_state.recognized_message)
         st.session_state['result'] = result
         store_message(st.session_state.user_email, st.session_state.recognized_message)
