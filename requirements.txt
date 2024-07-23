@@ -5,3 +5,4 @@ langchain-community
 python-dotenv
 SpeechRecognition
 pyttsx3
+faiss-cpu
