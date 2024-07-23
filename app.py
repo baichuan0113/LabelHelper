@@ -230,30 +230,30 @@ def show_main_app():
 
     r = sr.Recognizer()
 
-    if st.button('Start Speaking!'):
-        with sr.Microphone() as source:
-            calibration_message = st.empty()
-            calibration_message.write("Please wait. Calibrating microphone...")
-            r.adjust_for_ambient_noise(source, duration=1)
-            calibration_message.empty()
-            speak_message = st.empty()
-            speak_message.write("Microphone calibrated. Start speaking.")
+    # if st.button('Start Speaking!'):
+    #     with sr.Microphone() as source:
+    #         calibration_message = st.empty()
+    #         calibration_message.write("Please wait. Calibrating microphone...")
+    #         r.adjust_for_ambient_noise(source, duration=1)
+    #         calibration_message.empty()
+    #         speak_message = st.empty()
+    #         speak_message.write("Microphone calibrated. Start speaking.")
 
-            try:
-                audio_data = r.listen(source, timeout=10)
-                speak_message.write("Voice recording completed!")
-                message = r.recognize_google(audio_data)
-                st.session_state.recognized_message = message
-                logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
-                speak_message.empty()
-                st.write(f"You spoke {len(message.split())} words.")
-                result = generate_response(message)
-                st.session_state['result'] = result
-                store_message(st.session_state.user_email, message)
-            except sr.UnknownValueError:
-                st.error("Google Speech Recognition could not understand audio")
-            except sr.RequestError as e:
-                st.error(f"Could not request results from Google Speech Recognition service; {e}")
+    #         try:
+    #             audio_data = r.listen(source, timeout=10)
+    #             speak_message.write("Voice recording completed!")
+    #             message = r.recognize_google(audio_data)
+    #             st.session_state.recognized_message = message
+    #             logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
+    #             speak_message.empty()
+    #             st.write(f"You spoke {len(message.split())} words.")
+    #             result = generate_response(message)
+    #             st.session_state['result'] = result
+    #             store_message(st.session_state.user_email, message)
+    #         except sr.UnknownValueError:
+    #             st.error("Google Speech Recognition could not understand audio")
+    #         except sr.RequestError as e:
+    #             st.error(f"Could not request results from Google Speech Recognition service; {e}")
 
     if 'result' in st.session_state and st.session_state['result']:
         st.info(st.session_state['result'])
