@@ -17,29 +17,52 @@ import threading
 import multiprocessing
 import sqlite3
 from streamlit_webrtc import webrtc_streamer, WebRtcMode, AudioProcessorBase
+import queue
+import numpy as np
 
-
-class AudioProcessor(AudioProcessorBase):
+class AudioRecorder(AudioProcessorBase):
     def __init__(self):
-        self.recognizer = sr.Recognizer()
+        self.frames = []
+        self.recording = False
+        self.q = queue.Queue()
+        self.sr = sr.Recognizer()
 
-    def recv(self, frame: av.AudioFrame) -> av.AudioFrame:
-        audio = frame.to_ndarray()
-        audio = audio.mean(axis=1)  # Convert stereo to mono if needed
-        audio_data = sr.AudioData(audio.tobytes(), frame.sample_rate, 2)
-        try:
-            text = self.recognizer.recognize_google(audio_data)
-            print("this is text!!!!")
-            print(text)
-            st.session_state.recognized_message = text
-            store_message(st.session_state.user_email, text)
-            st.session_state.result = generate_response(text)
-        except sr.UnknownValueError:
-            st.error("Google Speech Recognition could not understand audio")
-        except sr.RequestError as e:
-            st.error(f"Could not request results from Google Speech Recognition service; {e}")
+    def recv(self, frame):
+        if self.recording:
+            audio_frame = frame.to_ndarray()
+            self.frames.append(audio_frame)
+            if len(self.frames) * 10 > 48000:  # Roughly 10 seconds of audio at 48kHz
+                self.recording = False
+                self.q.put(self.frames.copy())
+                self.frames = []
         return frame
-    
+
+    def start_recording(self):
+        self.frames = []
+        self.recording = True
+
+    def stop_recording(self):
+        self.recording = False
+
+    def process_audio(self):
+        while True:
+            frames = self.q.get()
+            audio_data = np.concatenate(frames, axis=0).astype(np.int16)
+            audio_data = audio_data.tobytes()
+            audio_source = sr.AudioData(audio_data, 48000, 2)
+            try:
+                message = self.sr.recognize_google(audio_source)
+                st.session_state.recognized_message = message
+                st.write(f"Recognized Message: {message}")
+                st.write(f"You spoke {len(message.split())} words.")
+                result = generate_response(message)
+                st.session_state['result'] = result
+                store_message(st.session_state.user_email, message)
+            except sr.UnknownValueError:
+                st.error("Google Speech Recognition could not understand audio")
+            except sr.RequestError as e:
+                st.error(f"Could not request results from Google Speech Recognition service; {e}")
+
 
 def init_db():
     conn = sqlite3.connect('users.db')
@@ -220,69 +243,74 @@ def show_main_app():
     logtxtbox = st.empty()
     logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
 
+    r = sr.Recognizer()
+
+    recorder = AudioRecorder()
     webrtc_ctx = webrtc_streamer(
-        key="audio",
-        mode=WebRtcMode.SENDRECV,
-        audio_processor_factory=AudioProcessor,
-        media_stream_constraints={
-            "audio": True,
-            "video": False,
-        },
-        async_processing=True,
+        key="example",
+        mode=WebRtcMode.SENDONLY,
+        audio_processor_factory=lambda: recorder,
+        media_stream_constraints={"audio": True},
     )
 
-    if 'result' in st.session_state and st.session_state['result']:
-        st.subheader("Generated Response")
-        st.info(st.session_state.result)
+    if st.button('Start Speaking!'):
+        recorder.start_recording()
+        st.write("Recording started...")
 
+        def stop_recording_after_delay():
+            threading.Timer(10, stop_recording).start()
+
+        def stop_recording():
+            recorder.stop_recording()
+            st.write("Recording stopped.")
+
+        stop_recording_after_delay()
+        if 'recognized_message' in st.session_state:
+            logtxtbox = st.empty()
+            logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
+            print(st.session_state.recognized_message)
+            print("-----------")
+            result = generate_response(st.session_state.recognized_message)
+            st.session_state['result'] = result
+            store_message(st.session_state.user_email, st.session_state.recognized_message)
+        # with sr.Microphone() as source:
+        #     calibration_message = st.empty()
+        #     calibration_message.write("Please wait. Calibrating microphone...")
+        #     r.adjust_for_ambient_noise(source, duration=1)
+        #     calibration_message.empty()
+        #     speak_message = st.empty()
+        #     speak_message.write("Microphone calibrated. Start speaking.")
+
+        #     try:
+        #         audio_data = r.listen(source, timeout=10)
+        #         speak_message.write("Voice recording completed!")
+        #         message = r.recognize_google(audio_data)
+        #         st.session_state.recognized_message = message
+        #         logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
+        #         speak_message.empty()
+        #         st.write(f"You spoke {len(message.split())} words.")
+        #         result = generate_response(message)
+        #         st.session_state['result'] = result
+        #         store_message(st.session_state.user_email, message)
+        #     except sr.UnknownValueError:
+        #         st.error("Google Speech Recognition could not understand audio")
+        #     except sr.RequestError as e:
+        #         st.error(f"Could not request results from Google Speech Recognition service; {e}")
+
+    if 'result' in st.session_state and st.session_state['result']:
+        st.info(st.session_state['result'])
+        if st.button('Speak Result'):
+            process = multiprocessing.Process(target=speak_text, args=(st.session_state['result'],))
+            process.start()
+            st.session_state['process'] = process
+        if st.button('Stop Speaking'):
+            if 'process' in st.session_state:
+                st.session_state['process'].terminate()
+                st.session_state['process'] = None
     st.subheader("Your Recognized Messages")
     messages = get_messages(st.session_state.user_email)
-    print(messages)
-    print("-------------")
     for msg, timestamp in messages:
         st.write(f"{timestamp}: {msg}")
-
-    # r = sr.Recognizer()
-
-    # if st.button('Start Speaking!'):
-    #     with sr.Microphone() as source:
-    #         calibration_message = st.empty()
-    #         calibration_message.write("Please wait. Calibrating microphone...")
-    #         r.adjust_for_ambient_noise(source, duration=1)
-    #         calibration_message.empty()
-    #         speak_message = st.empty()
-    #         speak_message.write("Microphone calibrated. Start speaking.")
-
-    #         try:
-    #             audio_data = r.listen(source, timeout=10)
-    #             speak_message.write("Voice recording completed!")
-    #             message = r.recognize_google(audio_data)
-    #             st.session_state.recognized_message = message
-    #             logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
-    #             speak_message.empty()
-    #             st.write(f"You spoke {len(message.split())} words.")
-    #             result = generate_response(message)
-    #             st.session_state['result'] = result
-    #             store_message(st.session_state.user_email, message)
-    #         except sr.UnknownValueError:
-    #             st.error("Google Speech Recognition could not understand audio")
-    #         except sr.RequestError as e:
-    #             st.error(f"Could not request results from Google Speech Recognition service; {e}")
-
-    # if 'result' in st.session_state and st.session_state['result']:
-    #     st.info(st.session_state['result'])
-    #     if st.button('Speak Result'):
-    #         process = multiprocessing.Process(target=speak_text, args=(st.session_state['result'],))
-    #         process.start()
-    #         st.session_state['process'] = process
-    #     if st.button('Stop Speaking'):
-    #         if 'process' in st.session_state:
-    #             st.session_state['process'].terminate()
-    #             st.session_state['process'] = None
-    # st.subheader("Your Recognized Messages")
-    # messages = get_messages(st.session_state.user_email)
-    # for msg, timestamp in messages:
-    #     st.write(f"{timestamp}: {msg}")
 
 if __name__ == '__main__':
     main()
