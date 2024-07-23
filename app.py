@@ -31,6 +31,7 @@ class AudioProcessor(AudioProcessorBase):
             text = self.recognizer.recognize_google(audio_data)
             st.session_state.recognized_message = text
             store_message(st.session_state.user_email, text)
+            st.session_state.result = generate_response(text)
         except sr.UnknownValueError:
             st.error("Google Speech Recognition could not understand audio")
         except sr.RequestError as e:
@@ -228,7 +229,16 @@ def show_main_app():
         async_processing=True,
     )
 
-    r = sr.Recognizer()
+    if st.session_state.result:
+        st.subheader("Generated Response")
+        st.info(st.session_state.result)
+
+    st.subheader("Your Recognized Messages")
+    messages = get_messages(st.session_state.user_email)
+    for msg, timestamp in messages:
+        st.write(f"{timestamp}: {msg}")
+
+    # r = sr.Recognizer()
 
     # if st.button('Start Speaking!'):
     #     with sr.Microphone() as source:
@@ -255,20 +265,20 @@ def show_main_app():
     #         except sr.RequestError as e:
     #             st.error(f"Could not request results from Google Speech Recognition service; {e}")
 
-    if 'result' in st.session_state and st.session_state['result']:
-        st.info(st.session_state['result'])
-        if st.button('Speak Result'):
-            process = multiprocessing.Process(target=speak_text, args=(st.session_state['result'],))
-            process.start()
-            st.session_state['process'] = process
-        if st.button('Stop Speaking'):
-            if 'process' in st.session_state:
-                st.session_state['process'].terminate()
-                st.session_state['process'] = None
-    st.subheader("Your Recognized Messages")
-    messages = get_messages(st.session_state.user_email)
-    for msg, timestamp in messages:
-        st.write(f"{timestamp}: {msg}")
+    # if 'result' in st.session_state and st.session_state['result']:
+    #     st.info(st.session_state['result'])
+    #     if st.button('Speak Result'):
+    #         process = multiprocessing.Process(target=speak_text, args=(st.session_state['result'],))
+    #         process.start()
+    #         st.session_state['process'] = process
+    #     if st.button('Stop Speaking'):
+    #         if 'process' in st.session_state:
+    #             st.session_state['process'].terminate()
+    #             st.session_state['process'] = None
+    # st.subheader("Your Recognized Messages")
+    # messages = get_messages(st.session_state.user_email)
+    # for msg, timestamp in messages:
+    #     st.write(f"{timestamp}: {msg}")
 
 if __name__ == '__main__':
     main()
