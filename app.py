@@ -29,6 +29,8 @@ class AudioProcessor(AudioProcessorBase):
         audio_data = sr.AudioData(audio.tobytes(), frame.sample_rate, 2)
         try:
             text = self.recognizer.recognize_google(audio_data)
+            print("this is text!!!!")
+            print(text)
             st.session_state.recognized_message = text
             store_message(st.session_state.user_email, text)
             st.session_state.result = generate_response(text)
@@ -235,6 +237,8 @@ def show_main_app():
 
     st.subheader("Your Recognized Messages")
     messages = get_messages(st.session_state.user_email)
+    print(messages)
+    print("-------------")
     for msg, timestamp in messages:
         st.write(f"{timestamp}: {msg}")
 
