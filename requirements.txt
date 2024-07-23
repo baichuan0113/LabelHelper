@@ -5,4 +5,3 @@ langchain-community
 python-dotenv
 SpeechRecognition
 pyttsx3
-sqlite3
