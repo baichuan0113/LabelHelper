@@ -229,7 +229,7 @@ def show_main_app():
         async_processing=True,
     )
 
-    if st.session_state.result:
+    if 'result' in st.session_state and st.session_state['result']:
         st.subheader("Generated Response")
         st.info(st.session_state.result)
 
