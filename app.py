@@ -262,6 +262,11 @@ def show_main_app():
 
         stop_recording_after_delay()
 
+    # Start audio processing thread
+    if not hasattr(st.session_state, 'audio_thread'):
+        st.session_state.audio_thread = threading.Thread(target=recorder.process_audio, daemon=True)
+        st.session_state.audio_thread.start()
+
     if 'recognized_message' in st.session_state:
         #logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
         result = generate_response(st.session_state.recognized_message)
@@ -283,11 +288,6 @@ def show_main_app():
     messages = get_messages(st.session_state.user_email)
     for msg, timestamp in messages:
         st.write(f"{timestamp}: {msg}")
-
-    # Start audio processing thread
-    if not hasattr(st.session_state, 'audio_thread'):
-        st.session_state.audio_thread = threading.Thread(target=recorder.process_audio, daemon=True)
-        st.session_state.audio_thread.start()
 
 
 
