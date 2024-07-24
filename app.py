@@ -187,9 +187,9 @@ def show_login_page():
         override_height=75,
         debounce_time=0)
 
-if result:
-    if "GET_TEXT" in result:
-        st.write(result.get("GET_TEXT"))
+    if result:
+        if "GET_TEXT" in result:
+            st.write(result.get("GET_TEXT"))
 
 # 1. Vectorise the sales response csv data
 loader = CSVLoader(file_path="response.csv", encoding='iso-8859-1')
