@@ -6,6 +6,4 @@ python-dotenv
 SpeechRecognition
 pyttsx3
 faiss-cpu
-pyaudio
-sounddevice
-av
+io

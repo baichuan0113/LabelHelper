@@ -8,7 +8,6 @@ from langchain.chains import LLMChain
 from dotenv import load_dotenv
 import speech_recognition as sr
 import os
-import av
 import time
 import pyttsx3
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -16,21 +15,19 @@ import asyncio
 import threading
 import multiprocessing
 import sqlite3
-import sounddevice as sd
+from audiorecorder import audiorecorder 
 import numpy as np
-
-def record_audio(duration=5, samplerate=16000):
-    """Record audio from the microphone."""
-    st.write("Recording...")
-    recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='int16')
-    sd.wait()
-    st.write("Recording finished.")
-    return recording
-
-def recognize_audio(audio_data, samplerate=16000):
+import io
+from pydub import AudioSegment
+def recognize_audio(audio_segment):
     """Recognize text from recorded audio."""
     recognizer = sr.Recognizer()
-    audio_data = sr.AudioData(audio_data.tobytes(), samplerate, 2)  # Create AudioData object correctly
+    # Convert AudioSegment to a bytes-like object
+    with io.BytesIO() as audio_buffer:
+        audio_segment.export(audio_buffer, format="wav")
+        audio_buffer.seek(0)
+        with sr.AudioFile(audio_buffer) as source:
+            audio_data = recognizer.record(source)
     try:
         text = recognizer.recognize_google(audio_data)
     except sr.UnknownValueError:
@@ -38,6 +35,7 @@ def recognize_audio(audio_data, samplerate=16000):
     except sr.RequestError as e:
         text = f"Could not request results from Google Speech Recognition service; {e}"
     return text
+
 
 
 def init_db():
@@ -218,13 +216,17 @@ def show_main_app():
 
     
 
-    if st.button("Record and Transcribe"):
-        audio_data = record_audio(duration=10)
-        try:
-            text = recognize_audio(audio_data)
-            st.session_state.recognized_message = text
-        except Exception as e:
-            st.error(f"Error in transcription: {e}")
+    # if st.button("Record and Transcribe"):
+    #     audio_data = record_audio(duration=10)
+    #     try:
+    #         text = recognize_audio(audio_data)
+    #         st.session_state.recognized_message = text
+    #     except Exception as e:
+    #         st.error(f"Error in transcription: {e}")
+    audio_data = audiorecorder("Record your message")
+    if audio_data is not None:
+        text = recognize_audio(audio_data)
+        st.session_state.recognized_message = text
 
 
     # Start audio processing thread
@@ -249,32 +251,6 @@ def show_main_app():
     messages = get_messages(st.session_state.user_email)
     for msg, timestamp in messages:
         st.write(f"{timestamp}: {msg}")
-
-
-
-    # with sr.Microphone() as source:
-        #     calibration_message = st.empty()
-        #     calibration_message.write("Please wait. Calibrating microphone...")
-        #     r.adjust_for_ambient_noise(source, duration=1)
-        #     calibration_message.empty()
-        #     speak_message = st.empty()
-        #     speak_message.write("Microphone calibrated. Start speaking.")
-
-        #     try:
-        #         audio_data = r.listen(source, timeout=10)
-        #         speak_message.write("Voice recording completed!")
-        #         message = r.recognize_google(audio_data)
-        #         st.session_state.recognized_message = message
-        #         logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
-        #         speak_message.empty()
-        #         st.write(f"You spoke {len(message.split())} words.")
-        #         result = generate_response(message)
-        #         st.session_state['result'] = result
-        #         store_message(st.session_state.user_email, message)
-        #     except sr.UnknownValueError:
-        #         st.error("Google Speech Recognition could not understand audio")
-        #     except sr.RequestError as e:
-        #         st.error(f"Could not request results from Google Speech Recognition service; {e}")
 
 if __name__ == '__main__':
     main()
