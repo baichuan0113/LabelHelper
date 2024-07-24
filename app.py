@@ -18,10 +18,6 @@ import multiprocessing
 import sqlite3
 import sounddevice as sd
 import numpy as np
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration, AudioProcessorBase
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
 
 def record_audio(duration=5, samplerate=16000):
     """Record audio from the microphone."""
