@@ -182,7 +182,7 @@ def speak_text(text):
 
 
 def main():
-    st.set_page_config(page_title="Roboflow Labelling Helper", page_icon=":bird:")
+    st.set_page_config(page_title="Roboflow Labelling Helper", page_icon=":bird: ({st.session_state.user_email})")
 
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
