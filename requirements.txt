@@ -9,3 +9,4 @@ faiss-cpu
 pyaudio
 streamlit-webrtc
 bokeh
+streamlit-bokeh-events
