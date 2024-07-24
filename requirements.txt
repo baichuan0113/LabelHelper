@@ -8,3 +8,4 @@ pyttsx3
 faiss-cpu
 pyaudio
 streamlit-webrtc
+bokeh
