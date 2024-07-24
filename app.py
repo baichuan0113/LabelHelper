@@ -20,7 +20,6 @@ import numpy as np
 import io
 from pydub import AudioSegment
 def recognize_audio(audio_segment):
-    """Recognize text from recorded audio."""
     recognizer = sr.Recognizer()
     # Convert AudioSegment to a bytes-like object
     with io.BytesIO() as audio_buffer:
@@ -196,7 +195,7 @@ def main():
 
 
 def show_main_app():
-    st.header(f"Welcome to Roboflow Labelling Helper :bird: ({st.session_state.user_email})")
+    st.header("Welcome to Roboflow Labelling Helper :bird:")
 
     if st.button("Logout"):
         st.session_state.authenticated = False
@@ -213,39 +212,28 @@ def show_main_app():
 
     logtxtbox = st.empty()
     logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
-
     
-
-    # if st.button("Record and Transcribe"):
-    #     audio_data = record_audio(duration=10)
-    #     try:
-    #         text = recognize_audio(audio_data)
-    #         st.session_state.recognized_message = text
-    #     except Exception as e:
-    #         st.error(f"Error in transcription: {e}")
     audio_data = audiorecorder("Record your message")
     if audio_data is not None:
         text = recognize_audio(audio_data)
         st.session_state.recognized_message = text
 
-
-    # Start audio processing thread
-    if 'recognized_message' in st.session_state:
-        #logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
+    # Only proceed if there is a recognized message that is not empty
+    if st.session_state.recognized_message.strip():
         result = generate_response(st.session_state.recognized_message)
         st.session_state['result'] = result
         store_message(st.session_state.user_email, st.session_state.recognized_message)
 
-    if 'result' in st.session_state and st.session_state['result']:
-        st.info(st.session_state['result'])
-        if st.button('Speak Result'):
-            process = multiprocessing.Process(target=speak_text, args=(st.session_state['result'],))
-            process.start()
-            st.session_state['process'] = process
-        if st.button('Stop Speaking'):
-            if 'process' in st.session_state:
-                st.session_state['process'].terminate()
-                st.session_state['process'] = None
+        if 'result' in st.session_state and st.session_state['result']:
+            st.info(st.session_state['result'])
+            if st.button('Speak Result'):
+                process = multiprocessing.Process(target=speak_text, args=(st.session_state['result'],))
+                process.start()
+                st.session_state['process'] = process
+            if st.button('Stop Speaking'):
+                if 'process' in st.session_state:
+                    st.session_state['process'].terminate()
+                    st.session_state['process'] = None
 
     st.subheader("Your Recognized Messages")
     messages = get_messages(st.session_state.user_email)
