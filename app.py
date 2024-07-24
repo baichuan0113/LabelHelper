@@ -210,14 +210,15 @@ def show_main_app():
     if 'recognized_message' not in st.session_state:
         st.session_state.recognized_message = ""
 
-    logtxtbox = st.empty()
-    logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
-    
     # Display the recorder and wait for valid audio data
     audio_data = audiorecorder("Record your message", key="audiorecorder")
     if audio_data is not None and audio_data.duration_seconds > 0:  # Check that recording has actual content
         text = recognize_audio(audio_data)
         st.session_state.recognized_message = text
+
+    # Place the text_area here to ensure it updates anytime recognized_message is updated
+    logtxtbox = st.empty()
+    logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
 
     # Only proceed if there is a recognized message that is not empty
     if st.session_state.recognized_message.strip():
