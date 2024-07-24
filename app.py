@@ -213,8 +213,9 @@ def show_main_app():
     logtxtbox = st.empty()
     logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
     
-    audio_data = audiorecorder("Record your message")
-    if audio_data is not None:
+    # Display the recorder and wait for valid audio data
+    audio_data = audiorecorder("Record your message", key="audiorecorder")
+    if audio_data is not None and audio_data.duration_seconds > 0:  # Check that recording has actual content
         text = recognize_audio(audio_data)
         st.session_state.recognized_message = text
 
