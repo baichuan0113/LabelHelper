@@ -20,48 +20,52 @@ from streamlit_webrtc import webrtc_streamer, WebRtcMode, AudioProcessorBase
 import queue
 import numpy as np
 
-class AudioRecorder(AudioProcessorBase):
-    def __init__(self):
-        self.frames = []
-        self.recording = False
-        self.q = queue.Queue()
-        self.sr = sr.Recognizer()
+from bokeh.models.widgets import Button
+from bokeh.models import CustomJS
+from streamlit_bokeh_events import streamlit_bokeh_events
 
-    def recv(self, frame):
-        if self.recording:
-            audio_frame = frame.to_ndarray()
-            self.frames.append(audio_frame)
-            if len(self.frames) * 10 > 48000:  # Roughly 10 seconds of audio at 48kHz
-                self.recording = False
-                self.q.put(self.frames.copy())
-                self.frames = []
-        return frame
+# class AudioRecorder(AudioProcessorBase):
+#     def __init__(self):
+#         self.frames = []
+#         self.recording = False
+#         self.q = queue.Queue()
+#         self.sr = sr.Recognizer()
 
-    def start_recording(self):
-        self.frames = []
-        self.recording = True
+#     def recv(self, frame):
+#         if self.recording:
+#             audio_frame = frame.to_ndarray()
+#             self.frames.append(audio_frame)
+#             if len(self.frames) * 10 > 48000:  # Roughly 10 seconds of audio at 48kHz
+#                 self.recording = False
+#                 self.q.put(self.frames.copy())
+#                 self.frames = []
+#         return frame
 
-    def stop_recording(self):
-        self.recording = False
+#     def start_recording(self):
+#         self.frames = []
+#         self.recording = True
 
-    def process_audio(self):
-        while True:
-            frames = self.q.get()
-            audio_data = np.concatenate(frames, axis=0).astype(np.int16)
-            audio_data = audio_data.tobytes()
-            audio_source = sr.AudioData(audio_data, 48000, 2)
-            try:
-                message = self.sr.recognize_google(audio_source)
-                st.session_state.recognized_message = message
-                st.write(f"Recognized Message: {message}")
-                st.write(f"You spoke {len(message.split())} words.")
-                result = generate_response(message)
-                st.session_state['result'] = result
-                store_message(st.session_state.user_email, message)
-            except sr.UnknownValueError:
-                st.error("Google Speech Recognition could not understand audio")
-            except sr.RequestError as e:
-                st.error(f"Could not request results from Google Speech Recognition service; {e}")
+#     def stop_recording(self):
+#         self.recording = False
+
+#     def process_audio(self):
+#         while True:
+#             frames = self.q.get()
+#             audio_data = np.concatenate(frames, axis=0).astype(np.int16)
+#             audio_data = audio_data.tobytes()
+#             audio_source = sr.AudioData(audio_data, 48000, 2)
+#             try:
+#                 message = self.sr.recognize_google(audio_source)
+#                 st.session_state.recognized_message = message
+#                 st.write(f"Recognized Message: {message}")
+#                 st.write(f"You spoke {len(message.split())} words.")
+#                 result = generate_response(message)
+#                 st.session_state['result'] = result
+#                 store_message(st.session_state.user_email, message)
+#             except sr.UnknownValueError:
+#                 st.error("Google Speech Recognition could not understand audio")
+#             except sr.RequestError as e:
+#                 st.error(f"Could not request results from Google Speech Recognition service; {e}")
 
 
 def init_db():
@@ -241,29 +245,71 @@ def show_main_app():
     logtxtbox = st.empty()
     logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
 
-    recorder = AudioRecorder()
-    webrtc_ctx = webrtc_streamer(
-        key="example",
-        mode=WebRtcMode.SENDONLY,
-        audio_processor_factory=lambda: recorder,
-        media_stream_constraints={"audio": True},
-    )
 
-    if st.button('Start Speaking!'):
-        recorder.start_recording()
-        st.write("Recording started...")
 
-        def stop_recording_after_delay():
-            threading.Timer(10, stop_recording).start()
+    stt_button = Button(label="Speak", width=100)
 
-        def stop_recording():
-            recorder.stop_recording()
-            st.write("Recording stopped.")
+    stt_button.js_on_event("button_click", CustomJS(code="""
+        var recognition = new webkitSpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+    
+        recognition.onresult = function (e) {
+            var value = "";
+            for (var i = e.resultIndex; i < e.results.length; ++i) {
+                if (e.results[i].isFinal) {
+                    value += e.results[i][0].transcript;
+                }
+            }
+            if ( value != "") {
+                document.dispatchEvent(new CustomEvent("GET_TEXT", {detail: value}));
+            }
+        }
+        recognition.start();
+        """))
+    
 
-        stop_recording_after_delay()
-        if not hasattr(st.session_state, 'audio_thread'):
-            st.session_state.audio_thread = threading.Thread(target=recorder.process_audio, daemon=True)
-            st.session_state.audio_thread.start()
+    temp_msg  = streamlit_bokeh_events(
+        stt_button,
+        events="GET_TEXT",
+        key="listen",
+        refresh_on_update=False,
+        override_height=75,
+        debounce_time=0)
+    if temp_msg:
+        if "GET_TEXT" in temp_msg:
+            recognized_message = result.get("GET_TEXT")
+            st.write(recognized_message)
+            st.session_state.recognized_message = recognized_message
+            st.write(f"Recognized Message: {recognized_message}")
+            st.write(f"You spoke {len(recognized_message.split())} words.")
+    # result = generate_response(recognized_message)
+    # st.session_state['result'] = result
+    # store_message(st.session_state.user_email, recognized_message)
+
+    # recorder = AudioRecorder()
+    # webrtc_ctx = webrtc_streamer(
+    #     key="example",
+    #     mode=WebRtcMode.SENDONLY,
+    #     audio_processor_factory=lambda: recorder,
+    #     media_stream_constraints={"audio": True},
+    # )
+
+    # if st.button('Start Speaking!'):
+    #     recorder.start_recording()
+    #     st.write("Recording started...")
+
+    #     def stop_recording_after_delay():
+    #         threading.Timer(10, stop_recording).start()
+
+    #     def stop_recording():
+    #         recorder.stop_recording()
+    #         st.write("Recording stopped.")
+
+    #     stop_recording_after_delay()
+    #     if not hasattr(st.session_state, 'audio_thread'):
+    #         st.session_state.audio_thread = threading.Thread(target=recorder.process_audio, daemon=True)
+    #         st.session_state.audio_thread.start()
     
     # Start audio processing thread
     if 'recognized_message' in st.session_state:
