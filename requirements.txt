@@ -7,6 +7,4 @@ SpeechRecognition
 pyttsx3
 faiss-cpu
 pyaudio
-streamlit-webrtc
-bokeh
-streamlit-bokeh-events
+sounddevice
