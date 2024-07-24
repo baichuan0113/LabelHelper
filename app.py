@@ -229,13 +229,16 @@ def show_main_app():
         if 'result' in st.session_state and st.session_state['result']:
             st.info(st.session_state['result'])
             if st.button('Speak Result'):
-                process = multiprocessing.Process(target=speak_text, args=(st.session_state['result'],))
-                process.start()
-                st.session_state['process'] = process
+                if 'speaker_thread' not in st.session_state or not st.session_state.speaker_thread.is_alive():
+                    speaker_thread = threading.Thread(target=speak_text, args=(st.session_state['result'],))
+                    speaker_thread.start()
+                    st.session_state.speaker_thread = speaker_thread
             if st.button('Stop Speaking'):
-                if 'process' in st.session_state:
-                    st.session_state['process'].terminate()
-                    st.session_state['process'] = None
+                if 'speaker_thread' in st.session_state:
+                    engine = pyttsx3.init()
+                    engine.stop()
+                    st.session_state.speaker_thread.join()  # Ensure cleanup
+                    del st.session_state.speaker_thread
 
     st.subheader("Your Recognized Messages")
     messages = get_messages(st.session_state.user_email)
