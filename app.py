@@ -208,9 +208,9 @@ chain = RetrievalQA.from_chain_type(
 )
 # 4. Retrieval augmented generation
 def generate_response(query):
-    # response = chain.invoke({"query": query})
-    # return response['result']
-    return "test"
+    response = chain.invoke({"query": query})
+    return response['result']
+    # return "test"
 
 def main():
     st.set_page_config(page_title="Roboflow Labelling Helper", page_icon=":bird: ({st.session_state.user_email})")
