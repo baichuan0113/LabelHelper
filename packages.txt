@@ -1,3 +1,4 @@
 espeak
 ffmpeg
 libasound2-dev
+smtplib
