@@ -25,20 +25,21 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import pyrebase
 
+firebase_config = {
+    "apiKey": os.getenv("FIREBASE_API_KEY"),
+    "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+    "databaseURL": os.getenv("FIREBASE_DATABASE_URL"),
+    "projectId": os.getenv("FIREBASE_PROJECT_ID"),
+    "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
+    "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
+    "appId": os.getenv("FIREBASE_APP_ID"),
+    "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID")
+}
+
 if not firebase_admin._apps:
     cred = credentials.Certificate("labelhelper-273ed-04873d334799.json")
     firebase_admin.initialize_app(cred)
 
-firebase_config = {
-    "apiKey": "AIzaSyCwIK5aJ42Cm8eHUO34QF5RZPcqETb8f20",
-    "authDomain": "labelhelper-273ed.firebaseapp.com",
-    "databaseURL": "https://YOUR_PROJECT_ID.firebaseio.com",
-    "projectId": "labelhelper-273ed",
-    "storageBucket": "labelhelper-273ed.appspot.com",
-    "messagingSenderId": "321446598372",
-    "appId": "1:321446598372:web:b7738cf1827f2b736fbef1",
-    "measurementId": "G-5H2476DMD4"
-}
 firebase = pyrebase.initialize_app(firebase_config)
 auth_pyrebase = firebase.auth()
 
@@ -119,8 +120,8 @@ def authenticate_user(email, password):
         return False
 
 def send_custom_email(recipient_email, reset_link):
-    sender_email = "rondoyourgod@gmail.com"
-    sender_password = "dfif okuk eyil vmfv"
+    sender_email = os.getenv("EMAIL")
+    sender_password = os.getenv("EMAIL_PASSWORD")
     smtp_server = "smtp.gmail.com"
     smtp_port = 465
 
