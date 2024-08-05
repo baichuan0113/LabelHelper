@@ -206,9 +206,9 @@ chain = RetrievalQA.from_chain_type(
 )
 # 4. Retrieval augmented generation
 def generate_response(query):
-    # response = chain.invoke({"query": query})
-    # return response['result']
-    return "test"
+    response = chain.invoke({"query": query})
+    return response['result']
+    
 
 def main():
     st.set_page_config(page_title="Roboflow Labelling Helper", page_icon=":bird: ({st.session_state.user_email})")
@@ -259,7 +259,6 @@ def show_main_app():
     audio_data = audiorecorder("Record your message", key="audiorecorder")
     if audio_data is not None and audio_data.duration_seconds > 0:
         st.session_state.recognized_message = recognize_audio(audio_data)
-        st.rerun()
 
     # Text area to display recognized message
     textArea = st.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
