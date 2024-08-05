@@ -11,3 +11,6 @@ numpy
 pydub
 firebase-admin
 pyrebase4
+sounddevice
+av
+io

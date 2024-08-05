@@ -24,7 +24,9 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import pyrebase
-
+import asyncio
+import time
+import multiprocessing
 firebase_config = {
     "apiKey": os.getenv("FIREBASE_API_KEY"),
     "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
@@ -273,7 +275,7 @@ def show_main_app():
     if st.session_state.recognized_message.strip():
         if st.button("Generate Response"):
             st.session_state.result = generate_response(st.session_state.recognized_message)
-            #speak_text(st.session_state.engine, st.session_state.result)
+            speak_text(st.session_state.engine, st.session_state.result)
             st.rerun()
 
     # Display the result and speak it out
