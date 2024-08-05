@@ -273,7 +273,7 @@ def show_main_app():
     if st.session_state.recognized_message.strip():
         if st.button("Generate Response"):
             st.session_state.result = generate_response(st.session_state.recognized_message)
-            speak_text(st.session_state.engine, st.session_state.result)
+            #speak_text(st.session_state.engine, st.session_state.result)
             st.rerun()
 
     # Display the result and speak it out
