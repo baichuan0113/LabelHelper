@@ -7,3 +7,8 @@ SpeechRecognition
 pyttsx3
 faiss-cpu
 streamlit-audiorecorder
+numpy
+pydub
+firebase-admin
+pyrebase4
+smtplib

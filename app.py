@@ -8,17 +8,40 @@ from langchain.chains import LLMChain
 from dotenv import load_dotenv
 import speech_recognition as sr
 import os
-import time
 import pyttsx3
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
-import asyncio
 import threading
-import multiprocessing
 import sqlite3
 from audiorecorder import audiorecorder 
 import numpy as np
 import io
 from pydub import AudioSegment
+from langchain.chains import RetrievalQA
+import firebase_admin
+from firebase_admin import auth, credentials
+from firebase_admin.exceptions import FirebaseError
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import pyrebase
+
+if not firebase_admin._apps:
+    cred = credentials.Certificate("labelhelper-273ed-04873d334799.json")
+    firebase_admin.initialize_app(cred)
+
+firebase_config = {
+    "apiKey": "AIzaSyCwIK5aJ42Cm8eHUO34QF5RZPcqETb8f20",
+    "authDomain": "labelhelper-273ed.firebaseapp.com",
+    "databaseURL": "https://YOUR_PROJECT_ID.firebaseio.com",
+    "projectId": "labelhelper-273ed",
+    "storageBucket": "labelhelper-273ed.appspot.com",
+    "messagingSenderId": "321446598372",
+    "appId": "1:321446598372:web:b7738cf1827f2b736fbef1",
+    "measurementId": "G-5H2476DMD4"
+}
+firebase = pyrebase.initialize_app(firebase_config)
+auth_pyrebase = firebase.auth()
+
 def recognize_audio(audio_segment):
     recognizer = sr.Recognizer()
     # Convert AudioSegment to a bytes-like object
@@ -30,9 +53,10 @@ def recognize_audio(audio_segment):
     try:
         text = recognizer.recognize_google(audio_data)
     except sr.UnknownValueError:
-        text = "Google Speech Recognition could not understand audio"
+        text = ""
     except sr.RequestError as e:
-        text = f"Could not request results from Google Speech Recognition service; {e}"
+        text = ""
+        #text = f"Could not request results from Google Speech Recognition service; {e}"
     return text
 
 
@@ -80,24 +104,53 @@ def get_messages(user_email):
     return messages
 
 def register_user(email, password):
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
     try:
-        cursor.execute('INSERT INTO users (email, password) VALUES (?, ?)', (email, password))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        conn.close()
+        auth.sign_in_with_email_and_password(email, password)
+        return True
+    except:
         return False
-    conn.close()
-    return True
 
 def authenticate_user(email, password):
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM users WHERE email = ? AND password = ?', (email, password))
-    user = cursor.fetchone()
-    conn.close()
-    return user is not None
+    try:
+        user = auth_pyrebase.sign_in_with_email_and_password(email, password)
+        return True 
+    except Exception as e:
+        st.error(f"Failed: {e}")
+        return False
+
+def send_custom_email(recipient_email, reset_link):
+    sender_email = "rondoyourgod@gmail.com"
+    sender_password = "dfif okuk eyil vmfv"
+    smtp_server = "smtp.gmail.com"
+    smtp_port = 465
+
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = recipient_email
+    msg['Subject'] = "Password Reset Request"
+
+    body = f"""
+    <p>Click the link to reset your password: 
+    <a href="{reset_link}">Reset Password</a></p>
+    """
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+        server.set_debuglevel(1)
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, recipient_email, msg.as_string())
+        server.quit()
+        st.success(f"A password reset link has been sent to {recipient_email}")
+    except Exception as e:
+        st.error(f"Failed to send email: {e}")
+def send_reset_password_email(email):
+    try:
+        link = auth.generate_password_reset_link(email)
+        send_custom_email(email, link)
+    except FirebaseError as e:
+        st.error(f"An error occurred: {e}")
+    
 
 init_db()
 load_dotenv()
@@ -113,6 +166,7 @@ def show_login_page():
             st.session_state.authenticated = True
             st.session_state.user_email = email
             st.success("Login successful")
+            st.rerun()
         else:
             st.error("Invalid email or password")
 
@@ -122,9 +176,19 @@ def show_login_page():
     
     if st.button("Sign Up"):
         if register_user(new_email, new_password):
-            st.success("Signup successful, you can now login")
+            st.success("SignUp successful, you can now login")
+            st.balloons()
         else:
             st.error("Email already registered")
+    
+    st.subheader("Forgot Password?")
+    reset_email = st.text_input("Enter your email to reset password")
+    
+    if st.button("Reset Password"):
+        if reset_email:
+            send_reset_password_email(reset_email)
+        else:
+            st.error("Please enter your email")
 
 # 1. Vectorise the sales response csv data
 loader = CSVLoader(file_path="response.csv", encoding='iso-8859-1')
@@ -132,54 +196,18 @@ documents = loader.load()
 
 embeddings = OpenAIEmbeddings()
 db = FAISS.from_documents(documents, embeddings)
-
-# 2. Function for similarity search
-def retrieve_info(query):
-    similar_response = db.similarity_search(query, k=3)
-    page_contents_array = [doc.page_content for doc in similar_response]
-    return page_contents_array
-
-# 3. Setup LLMChain & prompts
 llm = ChatOpenAI(temperature=0, model="gpt-4-turbo-2024-04-09")
-template = """
-You are a world class business development representative. 
-I will share a prospect's message with you and you will give me the best answer that 
-I should send to this prospect based on past best practices, 
-and you will follow ALL of the rules below:
-
-1/ Response should be very similar or even identical to the past best practices, 
-in terms of length, tone of voice, logical arguments and other details
-
-2/ If the best practices are irrelevant, then try to mimic the style of the best practice to the prospect's message
-
-Below is a message I received from the prospect:
-{message}
-
-Here is a list of best practices of how we normally respond to prospects in similar scenarios:
-{best_practice}
-
-Please write the best response that I should send to this prospect:
-"""
-prompt = PromptTemplate(
-    input_variables=["message", "best_practice"],
-    template=template
+chain = RetrievalQA.from_chain_type(
+    llm=llm,
+    chain_type="stuff",  # Options include "stuff", "refine", "map_reduce", "map_rerank"
+    retriever=db.as_retriever(),
+    metadata={"application_type": "question_answering"}
 )
-chain = LLMChain(llm=llm, prompt=prompt)
-
 # 4. Retrieval augmented generation
-def generate_response(message):
-    best_practice = retrieve_info(message)
-    response = chain.run(message=message, best_practice=best_practice)
-    return response
-
-def speak_text(text):
-    engine = pyttsx3.init()
-    voices = engine.getProperty('voices')
-    engine.setProperty('voice', 'en-us')
-    engine.setProperty('rate', 150)
-    engine.say(text)
-    engine.runAndWait()
-
+def generate_response(query):
+    # response = chain.invoke({"query": query})
+    # return response['result']
+    return "test"
 
 def main():
     st.set_page_config(page_title="Roboflow Labelling Helper", page_icon=":bird: ({st.session_state.user_email})")
@@ -192,6 +220,18 @@ def main():
     else:
         show_main_app()
 
+def speak_text(engine, text):
+    def speak():
+        print("speaking!!")
+        engine.say(text)
+        engine.runAndWait()
+
+    if 'speaker_thread' in st.session_state and 'engine' in st.session_state:
+        st.session_state.engine.stop()
+        st.session_state.speaker_thread.join()
+
+    st.session_state.speaker_thread = threading.Thread(target=speak)
+    st.session_state.speaker_thread.start()
 
 
 def show_main_app():
@@ -199,46 +239,56 @@ def show_main_app():
 
     if st.button("Logout"):
         st.session_state.authenticated = False
-        st.experimental_rerun()
+        st.rerun()
 
     if 'engine' not in st.session_state:
         st.session_state.engine = pyttsx3.init()
-        voices = st.session_state.engine.getProperty('voices')
         st.session_state.engine.setProperty('voice', 'en-us')
-        st.session_state.engine.setProperty('rate', 100)
+        st.session_state.engine.setProperty('rate', 150)
 
     if 'recognized_message' not in st.session_state:
         st.session_state.recognized_message = ""
 
-    # Display the recorder and wait for valid audio data
-    audio_data = audiorecorder("Record your message", key="audiorecorder")
-    if audio_data is not None and audio_data.duration_seconds > 0:  # Check that recording has actual content
-        text = recognize_audio(audio_data)
-        st.session_state.recognized_message = text
+    if 'result' not in st.session_state:
+        st.session_state.result = ""
 
-    # Place the text_area here to ensure it updates anytime recognized_message is updated
-    logtxtbox = st.empty()
-    logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
+
+    # Display the recorder and wait for valid audio data
+    img = st.image("icon.png", width=50)
+    audio_data = audiorecorder("Record your message", key="audiorecorder")
+    if audio_data is not None and audio_data.duration_seconds > 0:
+        st.session_state.recognized_message = recognize_audio(audio_data)
+        st.rerun()
+
+    # Text area to display recognized message
+    textArea = st.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
+
+    # Button to clear the input text area
+    if st.button("Clear Message"):
+        st.session_state.recognized_message = ""
+        st.session_state.result = ""
+        st.rerun()
 
     # Only proceed if there is a recognized message that is not empty
     if st.session_state.recognized_message.strip():
-        result = generate_response(st.session_state.recognized_message)
-        st.session_state['result'] = result
-        store_message(st.session_state.user_email, st.session_state.recognized_message)
+        if st.button("Generate Response"):
+            st.session_state.result = generate_response(st.session_state.recognized_message)
+            speak_text(st.session_state.engine, st.session_state.result)
+            st.rerun()
 
-        if 'result' in st.session_state and st.session_state['result']:
-            st.info(st.session_state['result'])
-            if st.button('Speak Result'):
-                if 'speaker_thread' not in st.session_state or not st.session_state.speaker_thread.is_alive():
-                    speaker_thread = threading.Thread(target=speak_text, args=(st.session_state['result'],))
-                    speaker_thread.start()
-                    st.session_state.speaker_thread = speaker_thread
-            if st.button('Stop Speaking'):
-                if 'speaker_thread' in st.session_state:
-                    engine = pyttsx3.init()
-                    engine.stop()
-                    st.session_state.speaker_thread.join()  # Ensure cleanup
-                    del st.session_state.speaker_thread
+    # Display the result and speak it out
+    if st.session_state.result:
+        st.info(st.session_state.result)
+        store_message(st.session_state.user_email, st.session_state.recognized_message)
+        # Button to stop speaking
+        #and st.session_state.speaker_thread.is_alive()
+        if st.button("Stop Speaking"):
+            if 'speaker_thread' in st.session_state:
+                print("ending2!!!")
+                st.session_state.engine.endLoop()
+                st.session_state.engine.stop()
+                st.session_state.speaker_thread.join()
+                st.rerun()
 
     st.subheader("Your Recognized Messages")
     messages = get_messages(st.session_state.user_email)
@@ -247,197 +297,3 @@ def show_main_app():
 
 if __name__ == '__main__':
     main()
-
-
-# import streamlit as st
-# from streamlit_webrtc import webrtc_streamer, WebRtcMode, AudioProcessorBase
-# import av
-# from langchain_openai import ChatOpenAI
-# from langchain.document_loaders.csv_loader import CSVLoader
-# from langchain_community.vectorstores import FAISS
-# from langchain_openai import OpenAIEmbeddings
-# from langchain.prompts import PromptTemplate
-# from langchain.chains import LLMChain
-# from dotenv import load_dotenv
-# import os
-# import pyttsx3
-# import sqlite3
-# import speech_recognition as sr
-
-# os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-
-# # Load environment variables
-# load_dotenv()
-
-# OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-
-# if not OPENAI_API_KEY:
-#     st.error("OPENAI_API_KEY is not set. Please set it in the .env file or in the Streamlit secrets.")
-
-# # Initialize the database
-# def init_db():
-#     conn = sqlite3.connect('users.db')
-#     cursor = conn.cursor()
-#     cursor.execute('''
-#         CREATE TABLE IF NOT EXISTS users (
-#             id INTEGER PRIMARY KEY AUTOINCREMENT,
-#             email TEXT UNIQUE NOT NULL,
-#             password TEXT NOT NULL
-#         )
-#     ''')
-#     cursor.execute('''
-#         CREATE TABLE IF NOT EXISTS messages (
-#             id INTEGER PRIMARY KEY AUTOINCREMENT,
-#             user_id INTEGER NOT NULL,
-#             message TEXT NOT NULL,
-#             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-#             FOREIGN KEY (user_id) REFERENCES users (id)
-#         )
-#     ''')
-#     conn.commit()
-#     conn.close()
-
-# init_db()
-
-# def store_message(user_email, message):
-#     conn = sqlite3.connect('users.db')
-#     cursor = conn.cursor()
-#     cursor.execute('SELECT id FROM users WHERE email = ?', (user_email,))
-#     user_id = cursor.fetchone()[0]
-#     cursor.execute('INSERT INTO messages (user_id, message) VALUES (?, ?)', (user_id, message))
-#     conn.commit()
-#     conn.close()
-
-# def get_messages(user_email):
-#     conn = sqlite3.connect('users.db')
-#     cursor = conn.cursor()
-#     cursor.execute('SELECT id FROM users WHERE email = ?', (user_email,))
-#     user_id = cursor.fetchone()[0]
-#     cursor.execute('SELECT message, timestamp FROM messages WHERE user_id = ?', (user_id,))
-#     messages = cursor.fetchall()
-#     conn.close()
-#     return messages
-
-# def speak_text(text):
-#     engine = pyttsx3.init()
-#     voices = engine.getProperty('voices')
-#     engine.setProperty('voice', voices[3].id)
-#     engine.setProperty('rate', 100)
-#     engine.say(text)
-#     engine.runAndWait()
-
-# class AudioProcessor(AudioProcessorBase):
-#     def __init__(self):
-#         self.recognizer = sr.Recognizer()
-#         self.microphone = sr.Microphone()
-
-#     def recv(self, frame: av.AudioFrame) -> av.AudioFrame:
-#         with self.microphone as source:
-#             audio_data = self.recognizer.listen(source)
-#             try:
-#                 text = self.recognizer.recognize_google(audio_data)
-#                 st.write(f"Recognized: {text}")
-#                 store_message(st.session_state.user_email, text)
-#                 st.session_state.recognized_message = text
-#             except sr.UnknownValueError:
-#                 st.write("Google Speech Recognition could not understand audio")
-#             except sr.RequestError as e:
-#                 st.write(f"Could not request results from Google Speech Recognition service; {e}")
-#         return frame
-
-# def main():
-#     st.set_page_config(page_title="Roboflow Labelling Helper", page_icon=":bird:")
-
-#     if 'authenticated' not in st.session_state:
-#         st.session_state.authenticated = False
-
-#     if not st.session_state.authenticated:
-#         show_login_page()
-#     else:
-#         show_main_app()
-
-# def show_login_page():
-#     st.title("Login")
-#     email = st.text_input("Email")
-#     password = st.text_input("Password", type="password")
-    
-#     if st.button("Login"):
-#         if authenticate_user(email, password):
-#             st.session_state.authenticated = True
-#             st.session_state.user_email = email
-#             st.success("Login successful")
-#         else:
-#             st.error("Invalid email or password")
-
-#     st.subheader("Or Sign Up")
-#     new_email = st.text_input("New Email")
-#     new_password = st.text_input("New Password", type="password")
-    
-#     if st.button("Sign Up"):
-#         if register_user(new_email, new_password):
-#             st.success("Signup successful, you can now login")
-#         else:
-#             st.error("Email already registered")
-
-# def show_main_app():
-#     st.header(f"Welcome to Roboflow Labelling Helper :bird: ({st.session_state.user_email})")
-
-#     if st.button("Logout"):
-#         st.session_state.authenticated = False
-#         st.experimental_rerun()
-
-#     if 'engine' not in st.session_state:
-#         st.session_state.engine = pyttsx3.init()
-#         voices = st.session_state.engine.getProperty('voices')
-#         st.session_state.engine.setProperty('voice', voices[3].id)
-#         st.session_state.engine.setProperty('rate', 100)
-
-#     if 'recognized_message' not in st.session_state:
-#         st.session_state.recognized_message = ""
-
-#     logtxtbox = st.empty()
-#     logtxtbox.text_area("Recognized Message", value=st.session_state.recognized_message, height=200)
-
-#     webrtc_ctx = webrtc_streamer(
-#         key="audio",
-#         mode=WebRtcMode.SENDRECV,
-#         audio_processor_factory=AudioProcessor,
-#         media_stream_constraints={
-#             "audio": True,
-#             "video": False,
-#         },
-#         async_processing=True,
-#     )
-
-#     st.subheader("Your Recognized Messages")
-#     messages = get_messages(st.session_state.user_email)
-#     for msg, timestamp in messages:
-#         st.write(f"{timestamp}: {msg}")
-
-# def register_user(email, password):
-#     conn = sqlite3.connect('users.db')
-#     cursor = conn.cursor()
-#     try:
-#         cursor.execute('INSERT INTO users (email, password) VALUES (?, ?)', (email, password))
-#         conn.commit()
-#     except sqlite3.IntegrityError:
-#         conn.close()
-#         return False
-#     conn.close()
-#     return True
-
-# def authenticate_user(email, password):
-#     conn = sqlite3.connect('users.db')
-#     cursor = conn.cursor()
-#     cursor.execute('SELECT * FROM users WHERE email = ? AND password = ?', (email, password))
-#     user = cursor.fetchone()
-#     conn.close()
-#     return user is not None
-
-# def generate_response(message):
-#     best_practice = retrieve_info(message)
-#     response = chain.run(message=message, best_practice=best_practice)
-#     return response
-
-# if __name__ == "__main__":
-#     main()
